@@ -7,6 +7,7 @@ pub const COMPONENT_TYPE_SECRETS: &str = "secrets";
 pub const COMPONENT_TYPE_SINK: &str = "sink";
 pub const COMPONENT_TYPE_SOURCE: &str = "source";
 pub const COMPONENT_TYPE_TRANSFORM: &str = "transform";
+pub const COMPONENT_TYPE_GLOBAL_OPTION: &str = "global_option";
 pub const DOCS_META_ADDITIONAL_PROPS_DESC: &str = "docs::additional_props_description";
 pub const DOCS_META_ADVANCED: &str = "docs::advanced";
 pub const DOCS_META_COMPONENT_BASE_TYPE: &str = "docs::component_base_type";
@@ -21,6 +22,8 @@ pub const DOCS_META_HIDDEN: &str = "docs::hidden";
 pub const DOCS_META_HUMAN_NAME: &str = "docs::human_name";
 pub const DOCS_META_NUMERIC_TYPE: &str = "docs::numeric_type";
 pub const DOCS_META_OPTIONAL: &str = "docs::optional";
+pub const DOCS_META_COMMON: &str = "docs::common";
+pub const DOCS_META_REQUIRED: &str = "docs::required";
 pub const DOCS_META_SYNTAX_OVERRIDE: &str = "docs::syntax_override";
 pub const DOCS_META_TEMPLATEABLE: &str = "docs::templateable";
 pub const DOCS_META_TYPE_OVERRIDE: &str = "docs::type_override";
@@ -32,6 +35,7 @@ pub const METADATA: &str = "_metadata";
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ComponentType {
     EnrichmentTable,
+    GlobalOption,
     Provider,
     Secrets,
     Sink,
@@ -44,6 +48,7 @@ impl ComponentType {
     pub const fn as_str(&self) -> &'static str {
         match self {
             ComponentType::EnrichmentTable => COMPONENT_TYPE_ENRICHMENT_TABLE,
+            ComponentType::GlobalOption => COMPONENT_TYPE_GLOBAL_OPTION,
             ComponentType::Provider => COMPONENT_TYPE_PROVIDER,
             ComponentType::Secrets => COMPONENT_TYPE_SECRETS,
             ComponentType::Sink => COMPONENT_TYPE_SINK,
@@ -63,6 +68,7 @@ impl<'a> TryFrom<&'a str> for ComponentType {
     fn try_from(value: &'a str) -> Result<Self, Self::Error> {
         match value {
             COMPONENT_TYPE_ENRICHMENT_TABLE => Ok(ComponentType::EnrichmentTable),
+            COMPONENT_TYPE_GLOBAL_OPTION => Ok(ComponentType::GlobalOption),
             COMPONENT_TYPE_PROVIDER => Ok(ComponentType::Provider),
             COMPONENT_TYPE_SECRETS => Ok(ComponentType::Secrets),
             COMPONENT_TYPE_SINK => Ok(ComponentType::Sink),
