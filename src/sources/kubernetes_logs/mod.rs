@@ -10,6 +10,7 @@ use bytes::Bytes;
 use chrono::Utc;
 use futures::{future::FutureExt, stream::StreamExt};
 use futures_util::Stream;
+use http_1::{HeaderName, HeaderValue};
 use k8s_openapi::api::core::v1::{Namespace, Node, Pod};
 use k8s_paths_provider::K8sPathsProvider;
 use kube::{
@@ -34,7 +35,10 @@ use vector_lib::{
 };
 use vrl::value::{kind::Collection, Kind};
 
-use crate::sources::kubernetes_logs::partial_events_merger::merge_partial_events;
+use crate::{
+    built_info::{PKG_NAME, PKG_VERSION},
+    sources::kubernetes_logs::partial_events_merger::merge_partial_events,
+};
 use crate::{
     config::{
         log_schema, ComponentKey, DataType, GenerateConfig, GlobalOptions, SourceConfig,
@@ -193,7 +197,7 @@ pub struct Config {
     ///
     /// If your files share a common header that is not always a fixed size,
     ///
-    /// If the file has less than this amount of lines, it won’t be read at all.
+    /// If the file has less than this amount of lines, it won't be read at all.
     #[configurable(metadata(docs::type_unit = "lines"))]
     fingerprint_lines: usize,
 
@@ -586,7 +590,7 @@ impl Source {
         // If the user passed a custom Kubeconfig use it, otherwise
         // we attempt to load the local kubeconfig, followed by the
         // in-cluster environment variables
-        let client_config = match &config.kube_config_file {
+        let mut client_config = match &config.kube_config_file {
             Some(kc) => {
                 ClientConfig::from_custom_kubeconfig(
                     config::Kubeconfig::read_from(kc)?,
@@ -596,6 +600,11 @@ impl Source {
             }
             None => ClientConfig::infer().await?,
         };
+        if let Ok(user_agent) = HeaderValue::from_str(&format!("{}/{}", PKG_NAME, PKG_VERSION)) {
+            client_config
+                .headers
+                .push((HeaderName::from_static("user-agent"), user_agent));
+        }
         let client = Client::try_from(client_config)?;
 
         let data_dir = globals.resolve_and_make_data_subdir(config.data_dir.as_ref(), key.id())?;
@@ -692,10 +701,12 @@ impl Source {
                 field_selector: Some(field_selector),
                 label_selector: Some(label_selector),
                 list_semantic: list_semantic.clone(),
+                page_size: get_page_size(use_apiserver_cache),
                 ..Default::default()
             },
         )
-        .backoff(watcher::default_backoff());
+        .backoff(watcher::DefaultBackoff::default());
+
         let pod_store_w = reflector::store::Writer::default();
         let pod_state = pod_store_w.as_reader();
         let pod_cacher = MetaCache::new();
@@ -715,10 +726,11 @@ impl Source {
             watcher::Config {
                 label_selector: Some(namespace_label_selector),
                 list_semantic: list_semantic.clone(),
+                page_size: get_page_size(use_apiserver_cache),
                 ..Default::default()
             },
         )
-        .backoff(watcher::default_backoff());
+        .backoff(watcher::DefaultBackoff::default());
         let ns_store_w = reflector::store::Writer::default();
         let ns_state = ns_store_w.as_reader();
         let ns_cacher = MetaCache::new();
@@ -738,10 +750,11 @@ impl Source {
             watcher::Config {
                 field_selector: Some(node_selector),
                 list_semantic,
+                page_size: get_page_size(use_apiserver_cache),
                 ..Default::default()
             },
         )
-        .backoff(watcher::default_backoff());
+        .backoff(watcher::DefaultBackoff::default());
         let node_store_w = reflector::store::Writer::default();
         let node_state = node_store_w.as_reader();
         let node_cacher = MetaCache::new();
@@ -935,6 +948,15 @@ impl Source {
         }
         info!(message = "Done.");
         Ok(())
+    }
+}
+
+// Set page size to None if use_apiserver_cache is true, to make the list requests containing `resourceVersion=0`` parameters.
+fn get_page_size(use_apiserver_cache: bool) -> Option<u32> {
+    if use_apiserver_cache {
+        None
+    } else {
+        watcher::Config::default().page_size
     }
 }
 
